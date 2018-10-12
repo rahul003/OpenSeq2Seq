@@ -25,9 +25,14 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import collections
+import os
 import six
 import tensorflow as tf
+from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import control_flow_ops
+from tensorflow.python.ops import gen_array_ops
+from tensorflow.python.ops import init_ops
+from tensorflow.python.ops import math_ops
 
 from open_seq2seq.utils.utils import mask_nans, check_params
 from .automatic_loss_scaler import AutomaticLossScaler
@@ -53,6 +58,86 @@ OPTIMIZER_SUMMARIES = [
     "loss_scale"
 ]
 
+class ApplyGradients():
+  def __init__(self, opt, grads_and_vars, global_step, name, block_momentum, block_lr, block_end=False):
+    self._opt = opt
+    self._grads_and_vars = grads_and_vars
+    self._global_step = global_step
+    self._name = name
+    self._block_momentum = block_momentum
+    self._block_lr = block_lr
+    self._block_end = block_end
+
+  def _init_constant_op(self, v, dtype):
+    def init():
+      init_constant = gen_array_ops.fill(array_ops.shape(v), 0)
+      return math_ops.cast(init_constant, dtype)
+    return init
+
+  def __call__(self):
+    if not self._block_end:
+      return self._opt.apply_gradients(self._grads_and_vars, self._global_step, self._name)
+    else:
+      apply_grad = self._opt.apply_gradients(self._grads_and_vars, self._global_step, self._name)
+      assigns = []
+      with tf.control_dependencies([apply_grad]):
+        from horovod.tensorflow import allreduce, size
+        if size() > 1:
+          with tf.name_scope("bmuf"):
+            for grad, var in self._grads_and_vars:
+              if grad is not None:
+                var_avg = allreduce(var, global_op=True)
+
+                prev_weight = self._opt._get_or_make_slot(var, var.initialized_value(), 'prev_weight', self._name)
+                prev_global_weight = self._opt._get_or_make_slot(var, var.initialized_value(), 'prev_global_weight', self._name)
+                dtype = var.dtype.base_dtype
+                if var.get_shape().is_fully_defined():
+                    init = init_ops.constant_initializer(0, dtype=dtype)
+                else:
+                    init = self._init_constant_op(var, dtype)
+                prev_delta = self._opt._get_or_make_slot_with_initializer(var, init,
+                        var.get_shape(), dtype, 'prev_delta', self._name)
+
+                model_update_t = var_avg - prev_global_weight
+                curr_delta = self._block_momentum * prev_delta + self._block_lr * model_update_t
+
+                # Update model
+                W_t = prev_weight + curr_delta
+
+                # NBM scheme.
+                var_next = W_t + self._block_momentum * curr_delta
+
+                assigns.append(prev_weight.assign(W_t))
+                assigns.append(prev_global_weight.assign(var_next))
+                assigns.append(prev_delta.assign(curr_delta))
+                assigns.append(var.assign(var_next))
+
+      return tf.group(*assigns)
+
+class BMUFOptimizer(tf.train.Optimizer):
+  def __init__(self, optimizer, name=None, use_locking=False, device_dense='',
+               device_sparse='', bmuf_every=8, block_momentum=0.9, block_lr=1.0):
+    if name is None:
+      name = "BMUF{}".format(type(optimizer).__name__)
+    self._opt = optimizer
+    self._device_dense = device_dense
+    self._device_sparse = device_sparse
+    self._bmuf_every = bmuf_every
+    self._block_momentum = block_momentum
+    self._block_lr = block_lr
+    super(BMUFOptimizer, self).__init__(name=name, use_locking=use_locking)
+
+  def apply_gradients(self, grads_and_vars, global_step=None, name='apply_gradients'):
+    #must_apply_bmuf = tf.equal(tf.mod(global_step, self._bmuf_every), tf.constant(0, dtype=tf.int64))
+    in_block_op = ApplyGradients(self._opt, grads_and_vars, global_step, name, self._block_momentum, self._block_lr)
+    block_end_op = ApplyGradients(self._opt, grads_and_vars, global_step, name, self._block_momentum, self._block_lr, block_end=True)
+    #op = tf.cond(must_apply_bmuf, true_fn=block_end_op, false_fn=in_block_op)
+    return in_block_op(), block_end_op()
+
+  def compute_gradients(self, loss, var_list=None, gate_gradients=tf.train.Optimizer.GATE_OP, aggregation_method=None,
+          colocate_gradients_with_ops=False, grad_loss=None):
+      return self._opt.compute_gradients(loss, var_list, gate_gradients, aggregation_method,
+              colocate_gradients_with_ops, grad_loss)
 
 # necessary to redefine this function for pure float16 support
 def get_regularization_loss(scope=None, name="total_regularization_loss"):
@@ -184,6 +269,8 @@ def optimize_loss(loss,
     if dtype == 'mixed':
       opt = MixedPrecisionOptimizerWrapper(opt, loss_scale=loss_scaling)
 
+    opt = BMUFOptimizer(opt, block_momentum=float(os.environ['SM_HP_BLOCK_MOMENTUM']))
+
     # Compute gradients.
     grads_and_vars = opt.compute_gradients(
         loss, colocate_gradients_with_ops=True,
@@ -217,7 +304,7 @@ def optimize_loss(loss,
 
         def update_and_clear_op():
           with tf.control_dependencies([accum_op]):
-            red_grad_updates = opt.apply_gradients(
+            red_grad_updates, _ = opt.apply_gradients(
                 post_process_gradients(
                     reduce_gradients(grads_and_vars_accum, on_horovod=True),
                     lr=lr,
@@ -238,7 +325,7 @@ def optimize_loss(loss,
             false_fn=update_and_clear_op,
         )
       else:
-        grad_updates = opt.apply_gradients(
+        grad_updates, bmuf_op = opt.apply_gradients(
             post_process_gradients(
                 reduce_gradients(grads_and_vars, on_horovod=True),
                 lr=lr,
@@ -249,7 +336,7 @@ def optimize_loss(loss,
             global_step=global_step,
         )
     else:
-      grad_updates = opt.apply_gradients(
+      grad_updates, bmuf_op = opt.apply_gradients(
           post_process_gradients(
               grads_and_vars,
               lr=lr,
@@ -263,7 +350,7 @@ def optimize_loss(loss,
     # Ensure the train_tensor computes grad_updates.
     train_tensor = control_flow_ops.with_dependencies([grad_updates], loss)
 
-    return train_tensor
+    return train_tensor, bmuf_op
 
 
 def post_process_gradients(grads_and_vars, summaries, lr,

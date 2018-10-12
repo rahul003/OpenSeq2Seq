@@ -2,6 +2,7 @@
 from __future__ import absolute_import, division, print_function
 from __future__ import unicode_literals
 
+import os
 import time
 
 import numpy as np
@@ -108,6 +109,7 @@ def train(train_model, eval_model=None, debug_port=None):
         local_init_op=tf.group(tf.local_variables_initializer(), init_data_layer)
     )
   fetches = [train_model.train_op]
+  bmuf_op = train_model.bmuf_op
   try:
     total_objects = 0.0
     # on horovod num_gpus is 1
@@ -141,6 +143,7 @@ def train(train_model, eval_model=None, debug_port=None):
       stop_grace_period_secs=300,
       hooks=hooks)
   step = 0
+  bmuf_every = int(os.environ['SM_HP_BMUF_BLOCK_SIZE'])
   num_bench_updates = 0
   while True:
     if sess.should_stop():
@@ -155,6 +158,9 @@ def train(train_model, eval_model=None, debug_port=None):
         if step >= bench_start:
           num_bench_updates += 1
         fetches_vals = sess.run(fetches, feed_dict)
+
+        if step % bmuf_every == 0:
+            sess.run(bmuf_op, feed_dict)
       else:
         # necessary to skip "no-update" steps when iter_size > 1
         def run_with_no_hooks(step_context):

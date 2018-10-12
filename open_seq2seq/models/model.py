@@ -347,6 +347,7 @@ class Model:
 
     self.loss = None
     self.train_op = None
+    self.bmuf_op = None
     self.eval_losses = None
     self._num_objects_per_step = None
     self.skip_update_ph = None
@@ -450,7 +451,7 @@ class Model:
       if self.params.get('iter_size', 1) > 1:
         self.skip_update_ph = tf.placeholder(tf.bool)
 
-      self.train_op = optimize_loss(
+      self.train_op, self.bmuf_op = optimize_loss(
           loss=tf.cast(self.loss, tf.float32) + get_regularization_loss(),
           dtype=self.params['dtype'],
           optimizer=self.params['optimizer'],
