@@ -1,0 +1,8 @@
+mpirun -np 32 -H node5:8,node6:8,node7:8,node8:8 -bind-to none -map-by slot -x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH -x SM_HP_BLOCK_MOMENTUM=0.8 -x SM_HP_BMUF_BLOCK_SIZE=8 -x HOROVOD_HIERARCHICAL_ALLREDUCE=1 -mca pml ob1 -mca btl ^openib --mca btl_tcp_if_exclude docker0,lo -x NCCL_SOCKET_IFNAME=ens3 python /home/ubuntu/git/OpenSeq2Seq/run.py --config_file=example_configs/speech2text/ds2_large_8gpus_mp.py --mode=train_eval --use_horovod=True --enable_logs
+while :
+do
+    mpirun -np 32 -H node5:8,node6:8,node7:8,node8:8 -bind-to none -map-by slot -x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH -x SM_HP_BLOCK_MOMENTUM=0.8 -x SM_HP_BMUF_BLOCK_SIZE=8 -x HOROVOD_HIERARCHICAL_ALLREDUCE=1 -mca pml ob1 -mca btl ^openib --mca btl_tcp_if_exclude docker0,lo -x NCCL_SOCKET_IFNAME=ens3 python /home/ubuntu/git/OpenSeq2Seq/run.py --continue_learning --config_file=example_configs/speech2text/ds2_large_8gpus_mp.py --mode=train_eval --use_horovod=True --enable_logs
+    mpirun -np 4 -H node5:1,node6:1,node7:1,node8:1 pkill python
+    sleep 30
+done
+
