@@ -108,13 +108,15 @@ def train(train_model, eval_model=None, debug_port=None):
     scaffold = TransferScaffold(
         local_init_op=tf.group(tf.local_variables_initializer(), init_data_layer)
     )
-  fetches = [train_model.train_op]
-  bmuf_op = train_model.bmuf_op
+  fetches_inblock = [train_model.train_op]
+  fetches_blockend = [train_model.bmuf_op]
+  #bmuf_op = train_model.bmuf_op
   try:
     total_objects = 0.0
     # on horovod num_gpus is 1
     for worker_id in range(train_model.num_gpus):
-      fetches.append(train_model.get_num_objects_per_step(worker_id))
+      fetches_inblock.append(train_model.get_num_objects_per_step(worker_id))
+      fetches_blockend.append(train_model.get_num_objects_per_step(worker_id))
   except NotImplementedError:
     deco_print("WARNING: Can't compute number of objects per step, since "
                "train model does not define get_num_objects_per_step method.")
@@ -157,10 +159,14 @@ def train(train_model, eval_model=None, debug_port=None):
       if step % iter_size == 0:
         if step >= bench_start:
           num_bench_updates += 1
-        fetches_vals = sess.run(fetches, feed_dict)
-
         if step % bmuf_every == 0:
-            sess.run(bmuf_op, feed_dict)
+            fetches_vals = sess.run(fetches_blockend, feed_dict)
+        else:
+            fetches_vals = sess.run(fetches_inblock, feed_dict)
+        #fetches_vals = sess.run(fetches, feed_dict)
+
+        #if step % bmuf_every == 0:
+        #    sess.run(bmuf_op, feed_dict)
       else:
         # necessary to skip "no-update" steps when iter_size > 1
         def run_with_no_hooks(step_context):
@@ -170,7 +176,7 @@ def train(train_model, eval_model=None, debug_port=None):
       break
     if step >= bench_start:
       total_time += time.time() - tm
-      if len(fetches) > 1:
+      if len(fetches_inblock) > 1:
         for i in range(train_model.num_gpus):
           total_objects += np.sum(fetches_vals[i + 1])
         if train_model.params['print_bench_info_steps'] is not None:
@@ -184,7 +190,7 @@ def train(train_model, eval_model=None, debug_port=None):
     step += 1
   sess.close()
 
-  if len(fetches) > 1:
+  if len(fetches_inblock) > 1:
     total_objects = collect_if_horovod(total_objects, hvd, mode="sum")
 
   if master_worker:
@@ -192,7 +198,7 @@ def train(train_model, eval_model=None, debug_port=None):
     if step > bench_start:
       avg_time = 1.0 * total_time / num_bench_updates
       deco_print("Avg time per step: {:.3f}s".format(avg_time))
-      if len(fetches) > 1:
+      if len(fetches_inblock) > 1:
         avg_objects = 1.0 * total_objects / total_time
         deco_print("Avg objects per second: {:.3f}".format(avg_objects))
     else:
