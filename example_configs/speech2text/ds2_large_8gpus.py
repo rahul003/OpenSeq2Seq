@@ -24,6 +24,7 @@ base_params = {
   "eval_steps": 5000,
   "save_checkpoint_steps": 1000,
   "logdir": "experiments/librispeech",
+  "data_prefix": "~/librispeech/",
 
   "optimizer": "Momentum",
   "optimizer_params": {
@@ -77,21 +78,22 @@ base_params = {
   },
 
   "decoder": FullyConnectedCTCDecoder,
-  "decoder_params": {
-    "use_language_model": False,
-
-    # params for decoding the sequence with language model
-    "beam_width": 512,
-    "alpha": 2.0,
-    "beta": 1.0,
-
-    "decoder_library_path": "ctc_decoder_with_lm/libctc_decoder_with_kenlm.so",
-    "lm_path": "language_model/4-gram.binary",
-    "trie_path": "language_model/trie.binary",
-    "alphabet_config_path": "open_seq2seq/test_utils/toy_speech_data/vocab.txt",
-  },
   "loss": CTCLoss,
   "loss_params": {},
+}
+
+base_params["decoder_params"] = {
+  "use_language_model": False,
+
+  # params for decoding the sequence with language model
+  "beam_width": 512,
+  "alpha": 2.0,
+  "beta": 1.0,
+
+  "decoder_library_path": "ctc_decoder_with_lm/libctc_decoder_with_kenlm.so",
+  "lm_path": base_params["data_prefix"] + "language_model/4-gram.binary",
+  "trie_path": base_params["data_prefix"] + "language_model/trie.binary",
+  "alphabet_config_path": "open_seq2seq/test_utils/toy_speech_data/vocab.txt",
 }
 
 train_params = {
@@ -104,9 +106,9 @@ train_params = {
                      'noise_level_max': -60},
     "vocab_file": "open_seq2seq/test_utils/toy_speech_data/vocab.txt",
     "dataset_files": [
-      "data/librispeech/librivox-train-clean-100.csv",
-      "data/librispeech/librivox-train-clean-360.csv",
-      "data/librispeech/librivox-train-other-500.csv",
+      base_params["data_prefix"] + "librivox-train-clean-100.csv",
+      base_params["data_prefix"] + "librivox-train-clean-360.csv",
+      base_params["data_prefix"] +"librivox-train-other-500.csv",
     ],
     "max_duration": 16.7,
     "shuffle": True,
@@ -120,7 +122,7 @@ eval_params = {
     "input_type": "spectrogram",
     "vocab_file": "open_seq2seq/test_utils/toy_speech_data/vocab.txt",
     "dataset_files": [
-      "data/librispeech/librivox-dev-clean.csv",
+      base_params["data_prefix"] + "librivox-dev-clean.csv",
     ],
     "shuffle": False,
   },

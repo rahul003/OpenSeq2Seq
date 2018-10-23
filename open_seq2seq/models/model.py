@@ -40,6 +40,7 @@ class Model:
         'use_horovod': bool,
         'batch_size_per_gpu': int,
         'data_layer': None,  # could be any user defined class
+        "data_prefix": str,
     }
 
   @staticmethod
