@@ -466,6 +466,13 @@ def get_interactive_infer_results(model, sess, model_in):
 
   return model.infer(inputs, outputs)
 
+def get_tf_dtype(dtype):
+  """Returns actual TensorFlow dtype that will be used as variables dtype."""
+  if dtype == "float32":
+    return tf.float32
+  else:
+    return dtype
+
 def get_base_config(args):
   """This function parses the command line arguments, reads the config file, and
   gets the base_model from the config.
@@ -546,6 +553,8 @@ def get_base_config(args):
   config_update = parser_unk.parse_args(unknown)
   nested_update(base_config, nest_dict(vars(config_update)))
 
+  if 'dtype' in base_config:
+    base_config['dtype'] = get_tf_dtype(base_config['dtype'])
   return args, base_config, base_model, config_module
 
 def check_logdir(args, base_config, restore_best_checkpoint=False):

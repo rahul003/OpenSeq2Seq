@@ -780,6 +780,8 @@ class Model:
     """Returns actual TensorFlow dtype that will be used as variables dtype."""
     if self.params['dtype'] == "mixed":
       return tf.float16
+    elif self.params['dtype'] == "float32":
+      return tf.float32
     else:
       return self.params['dtype']
 

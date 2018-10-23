@@ -38,7 +38,7 @@ base_params = {
   "larc_params": {
     "larc_eta": 0.001,
   },
-  "dtype": tf.float32,
+  "dtype": "float32",
   # weight decay
   "regularizer": tf.contrib.layers.l2_regularizer,
   "regularizer_params": {
@@ -108,7 +108,7 @@ train_params = {
     "dataset_files": [
       base_params["data_prefix"] + "librivox-train-clean-100.csv",
       base_params["data_prefix"] + "librivox-train-clean-360.csv",
-      base_params["data_prefix"] +"librivox-train-other-500.csv",
+      base_params["data_prefix"] + "librivox-train-other-500.csv",
     ],
     "max_duration": 16.7,
     "shuffle": True,
