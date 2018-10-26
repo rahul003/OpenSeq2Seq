@@ -12,19 +12,24 @@ base_model = Speech2Text
 
 base_params = {
   "random_seed": 0,
-  "use_horovod": False,
+  "use_horovod": True,
   "num_gpus": 8,
   "batch_size_per_gpu": 16,
 
   "num_epochs": 50,
 
-  "save_summaries_steps": 100,
+  "save_summaries_steps": 10000,
   "print_loss_steps": 10,
   "print_samples_steps": 5000,
+  "print_bench_info_steps": 10,
+
   "eval_steps": 5000,
   "save_checkpoint_steps": 1000,
   "logdir": "experiments/librispeech",
   "data_prefix": "~/librispeech/",
+
+  "profile_steps": 0,
+
 
   "optimizer": "Momentum",
   "optimizer_params": {

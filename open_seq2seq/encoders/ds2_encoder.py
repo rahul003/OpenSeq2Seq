@@ -23,7 +23,7 @@ def rnn_cell(rnn_cell_dim, layer_type, dropout_keep_prob=1.0):
       cell = tf.nn.rnn_cell.GRUCell(rnn_cell_dim)
     elif layer_type == "cudnn_gru":
       # pylint: disable=no-member
-      cell = tf.contrib.cudnn_rnn.CudnnCompatibleGRUCell(rnn_cell_dim)
+      cell = tf.contrib.cudnn_rnn.CudnnGRU(rnn_cell_dim)
     elif layer_type == "cudnn_lstm":
       # pylint: disable=no-member
       cell = tf.contrib.cudnn_rnn.CudnnCompatibleLSTMCell(rnn_cell_dim)
