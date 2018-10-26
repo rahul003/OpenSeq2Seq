@@ -39,7 +39,7 @@ base_params = {
   "larc_params": {
     "larc_eta": 0.001,
   },
-  "dtype": tf.float32,
+  "dtype": "float32",
   # weight decay
   "regularizer": tf.contrib.layers.l2_regularizer,
   "regularizer_params": {
