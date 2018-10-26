@@ -153,7 +153,7 @@ def train(train_model, eval_model=None, debug_port=None):
   run_metadata = tf.RunMetadata()
   profiler = tf.profiler.Profiler(sess.graph)
   builder = tf.profiler.ProfileOptionBuilder
-  filename = 'ds2'
+  filename = train_model.params['profile_name']
   while True:
     if sess.should_stop():
       break
@@ -195,7 +195,7 @@ def train(train_model, eval_model=None, debug_port=None):
           profiler.add_step(step, run_metadata)
           profile_string = profiler.serialize_to_string()
           
-          with open(filename + '.profile_context', mode='wb') as f:
+          with open(filename + '.pc', mode='wb') as f:
             f.write(profile_string)
           writer = tf.summary.FileWriterCache.get(train_model.params['logdir'])
           writer.add_run_metadata(run_metadata, 'step%d' % step)
