@@ -17,9 +17,11 @@ base_params = {
   "batch_size_per_gpu": 16,
 
   "num_epochs": 50,
-
+  "print_bench_info_steps" : 10,
   "save_summaries_steps": 100,
   "print_loss_steps": 10,
+  "profile_steps": 0,
+  "profile_name": "ds2",
   "print_samples_steps": 5000,
   "eval_steps": 5000,
   "save_checkpoint_steps": 1000,
@@ -104,11 +106,11 @@ train_params = {
                      'noise_level_max': -60},
     "vocab_file": "open_seq2seq/test_utils/toy_speech_data/vocab.txt",
     "dataset_files": [
-      "data/librispeech/librivox-train-clean-100.csv",
-      "data/librispeech/librivox-train-clean-360.csv",
-      "data/librispeech/librivox-train-other-500.csv",
+      "~/librispeech/librivox-train-clean-100.csv",
+      "~/librispeech/librivox-train-clean-360.csv",
+      "~/librispeech/librivox-train-other-500.csv",
     ],
-    "max_duration": None,
+    "max_duration": 16.7,
     "shuffle": True,
   },
 }
@@ -120,7 +122,7 @@ eval_params = {
     "input_type": "spectrogram",
     "vocab_file": "open_seq2seq/test_utils/toy_speech_data/vocab.txt",
     "dataset_files": [
-      "data/librispeech/librivox-dev-clean.csv",
+      "~/data/librispeech/librivox-dev-clean.csv",
     ],
     "shuffle": False,
   },

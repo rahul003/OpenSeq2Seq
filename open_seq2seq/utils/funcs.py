@@ -142,8 +142,13 @@ def train(train_model, eval_model=None, debug_port=None):
       hooks=hooks)
   step = 0
   num_bench_updates = 0
+  run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+  run_metadata = tf.RunMetadata()
+  profiler = tf.profiler.Profiler(sess.graph)
+  builder = tf.profiler.ProfileOptionBuilder
+  filename = train_model.params['profile_name']
   while True:
-    if sess.should_stop():
+    if sess.should_stop() or step > 500:
       break
     tm = time.time()
     try:
@@ -154,12 +159,30 @@ def train(train_model, eval_model=None, debug_port=None):
       if step % iter_size == 0:
         if step >= bench_start:
           num_bench_updates += 1
-        fetches_vals = sess.run(fetches, feed_dict)
+        if step > 50 and train_model.params['profile_steps'] and step % train_model.params['profile_steps'] == 0:
+          fetches_vals = sess.run(fetches, feed_dict, options=run_options, run_metadata=run_metadata)
+        else:
+          fetches_vals = sess.run(fetches, feed_dict)
       else:
         # necessary to skip "no-update" steps when iter_size > 1
         def run_with_no_hooks(step_context):
-          return step_context.session.run(fetches, feed_dict)
+          if step>50 and train_model.params['profile_steps'] and step % train_model.params['profile_steps'] == 0:
+            return step_context.session.run(fetches, feed_dict, options=run_options, run_metadata=run_metadata)
+          else:
+            return step_context.session.run(fetches, feed_dict)
         fetches_vals = sess.run_step_fn(run_with_no_hooks)
+
+      if step>50 and train_model.params['profile_steps'] and step % train_model.params['profile_steps'] == 0:
+        if True:
+          profiler.add_step(step, run_metadata)
+          profile_string = profiler.serialize_to_string()
+          
+          with open(filename + str(hvd.rank()) + '.pc', mode='wb') as f:
+            f.write(profile_string)
+          if master_worker:
+            writer = tf.summary.FileWriterCache.get(train_model.params['logdir'])
+            writer.add_run_metadata(run_metadata, 'step%d' % step)
+
     except tf.errors.OutOfRangeError:
       break
     if step >= bench_start:

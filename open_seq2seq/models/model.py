@@ -58,7 +58,8 @@ class Model:
         'gpu_ids': list,  # cannot be used when num_gpus is specified
 
         'load_model': str,
-
+        'profile_name': str,
+        'profile_steps': None,
         'save_summaries_steps': None,  # could be int or None
         'print_loss_steps': None,  # could be int or None
         'print_samples_steps': None,  # could be int or None
