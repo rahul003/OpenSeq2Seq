@@ -17,7 +17,7 @@ base_params = {
   "batch_size_per_gpu": 16,
 
   "num_epochs": 50,
-  "profile_name": "ds2",
+  "profile_name": "ds2_job4",
   "save_summaries_steps": 10000,
   "print_loss_steps": 10,
   "print_samples_steps": 5000,
@@ -28,7 +28,7 @@ base_params = {
   "logdir": "experiments/librispeech",
   "data_prefix": "~/librispeech/",
 
-  "profile_steps": 0,
+  "profile_steps": 1,
 
 
   "optimizer": "Momentum",

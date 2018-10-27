@@ -191,14 +191,13 @@ def train(train_model, eval_model=None, debug_port=None):
         fetches_vals = sess.run_step_fn(run_with_no_hooks, train_model, step, run_options, run_metadata)
 
       if train_model.params['profile_steps'] and step % train_model.params['profile_steps'] == 0:
-        if master_worker:
-          profiler.add_step(step, run_metadata)
+        profiler.add_step(step, run_metadata)
+        if step == 50:
           profile_string = profiler.serialize_to_string()
-          
-          with open(filename + '.pc', mode='wb') as f:
+          with open(filename + str(hvd.rank()) +'.pc', mode='wb') as f:
             f.write(profile_string)
-          writer = tf.summary.FileWriterCache.get(train_model.params['logdir'])
-          writer.add_run_metadata(run_metadata, 'step%d' % step)
+        # writer = tf.summary.FileWriterCache.get(train_model.params['logdir'])
+        # writer.add_run_metadata(run_metadata, 'step%d' % step)
     except tf.errors.OutOfRangeError:
       break
 
