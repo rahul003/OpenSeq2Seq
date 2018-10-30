@@ -114,12 +114,28 @@ class Speech2Text(EncoderDecoderModel):
     return super(Speech2Text, self)._create_loss()
 
   def maybe_print_logs(self, input_values, output_values, training_step):
+    x, len_x = input_values['source_tensors']
+    samples = output_values[0]
+    x_sample = x[0]
+    len_x_sample = len_x[0]
     y, len_y = input_values['target_tensors']
+    y_sample = y[0]
+    len_y_sample = len_y[0]
+    
+    print("src len {}\nsum={}\nshape={}".format(len_x, sum(len_x), x.shape))
+    print("trg len {}\nsum={}\nshape={}".format(len_y, sum(len_y), y.shape))
+    #print(x)
+    #print(y)
+    print("bsz={}".format(np.sum(np.maximum(len_x, len_y) - 2)))
+    #print(y_sample)
+    #print(len_y_sample)
+    #print(y_sample[:len_y_sample])
+    return
     decoded_sequence = output_values
     y_one_sample = y[0]
     len_y_one_sample = len_y[0]
     decoded_sequence_one_batch = decoded_sequence[0]
-
+    
     # we also clip the sample by the correct length
     true_text = "".join(map(
         self.get_data_layer().params['idx2char'].get,
