@@ -128,11 +128,14 @@ class Speech2TextDataLayer(DataLayer):
     """Builds data processing graph using ``tf.data`` API."""
     if self.params['mode'] != 'infer':
       if self.params['synthetic']:
-        assert self.params['batch_size'] == 16
         # fast batch
         src_shapes = [int(x) for x in '1408 288 1224 1512 1368 1424 1200 1528 1624 1352 1552 800 1568 1104 1272 1288'.split()]
         target_shapes = [int(x) for x in '228 181 207 136 182 165 195 222 176 168 53 231 191 175 187 67'.split()]
+        
 
+        if self.params['batch_size'] == 32:
+          src_shapes += src_shapes
+          target_shapes += target_shapes
         # small data
         # src_shapes = [288] * self.params['batch_size']
         # src_shapes[-1] = 1624

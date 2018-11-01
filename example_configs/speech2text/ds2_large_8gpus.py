@@ -23,15 +23,14 @@ base_params = {
   "profile_name": "ds2",
   "print_samples_steps": 100,
   
-  
-  "save_checkpoint_steps": 0,
-  "save_summaries_steps": 0,
+  "save_checkpoint_steps": 1000000,
+  "save_summaries_steps": 1000000,
   
   "eval_steps": 5000,
 
   "logdir": "experiments/librispeech",
-  "bench_start": 100
-  ,
+  "bench_start": 100,
+  
   "optimizer": "Momentum",
   "optimizer_params": {
     "momentum": 0.90,
