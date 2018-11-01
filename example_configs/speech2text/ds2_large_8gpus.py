@@ -12,21 +12,26 @@ base_model = Speech2Text
 
 base_params = {
   "random_seed": 0,
-  "use_horovod": False,
+  "use_horovod": True,
   "num_gpus": 8,
   "batch_size_per_gpu": 16,
 
   "num_epochs": 50,
-  "print_bench_info_steps" : 10,
-  "save_summaries_steps": 100,
-  "print_loss_steps": 10,
+  "print_bench_info_steps" : 50,
+  "print_loss_steps": 50,
   "profile_steps": 0,
   "profile_name": "ds2",
-  "print_samples_steps": 5000,
+  "print_samples_steps": 100,
+  
+  
+  "save_checkpoint_steps": 0,
+  "save_summaries_steps": 0,
+  
   "eval_steps": 5000,
-  "save_checkpoint_steps": 1000,
-  "logdir": "experiments/librispeech",
 
+  "logdir": "experiments/librispeech",
+  "bench_start": 100
+  ,
   "optimizer": "Momentum",
   "optimizer_params": {
     "momentum": 0.90,
@@ -39,7 +44,7 @@ base_params = {
   "larc_params": {
     "larc_eta": 0.001,
   },
-  "dtype": "float32",
+  "dtype": "mixed",
   # weight decay
   "regularizer": tf.contrib.layers.l2_regularizer,
   "regularizer_params": {
@@ -112,6 +117,8 @@ train_params = {
     ],
     "max_duration": 16.7,
     "shuffle": True,
+    "synthetic": True,
+    "synthetic_len": 500,
   },
 }
 

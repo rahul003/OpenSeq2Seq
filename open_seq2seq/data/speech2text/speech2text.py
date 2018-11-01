@@ -34,6 +34,8 @@ class Speech2TextDataLayer(DataLayer):
         'pad_to': int,
         'max_duration': float,
         'autoregressive': bool,
+        'synthetic' : bool,
+        'synthetic_len': int,
     })
 
   def __init__(self, params, model, num_workers, worker_id):
@@ -125,37 +127,67 @@ class Speech2TextDataLayer(DataLayer):
   def build_graph(self):
     """Builds data processing graph using ``tf.data`` API."""
     if self.params['mode'] != 'infer':
-      self._dataset = tf.data.Dataset.from_tensor_slices(self._files)
-      if self.params['shuffle']:
-        self._dataset = self._dataset.shuffle(self._size)
-      self._dataset = self._dataset.repeat()
-      self._dataset = self._dataset.prefetch(tf.contrib.data.AUTOTUNE)
-      self._dataset = self._dataset.map(
-          lambda line: tf.py_func(
-              self._parse_audio_transcript_element,
-              [line],
-              [self.params['dtype'], tf.int32, tf.int32, tf.int32, tf.float32],
-              stateful=False,
-          ),
-          num_parallel_calls=8,
-      )
-      if self.params['max_duration'] is not None:
-        self._dataset = self._dataset.filter(
-            lambda x, x_len, y, y_len, duration:
-            tf.less_equal(duration, self.params['max_duration'])
+      if self.params['synthetic']:
+        assert self.params['batch_size'] == 16
+        # fast batch
+        src_shapes = [int(x) for x in '1408 288 1224 1512 1368 1424 1200 1528 1624 1352 1552 800 1568 1104 1272 1288'.split()]
+        target_shapes = [int(x) for x in '228 181 207 136 182 165 195 222 176 168 53 231 191 175 187 67'.split()]
+
+        # small data
+        # src_shapes = [288] * self.params['batch_size']
+        # src_shapes[-1] = 1624
+        # target_shapes = [176] * self.params['batch_size']
+
+
+        max_shape = max(src_shapes)
+        max_target_shape = max(target_shapes)
+        dt = np.float32 if self.params['dtype'] == tf.float32 else np.float16
+        def generate_batch():
+          avg_len = self.params['synthetic_len']
+          while 1:
+            x = np.random.rand(self.params['batch_size'], max_shape, self.params['num_audio_features']).astype(dtype=dt, copy=False)
+            x_len = np.array(src_shapes)
+            y = np.random.randint(0, 10, size=(self.params['batch_size'], max_target_shape), dtype=np.int32)
+            y_len = np.array(target_shapes)
+            yield (x, x_len, y, y_len)
+        
+        self._dataset = tf.data.Dataset.from_generator(generate_batch,
+          (dt, tf.int32, tf.int32, tf.int32),
+          ((tf.TensorShape([None, None, None])), (tf.TensorShape([None])), 
+            (tf.TensorShape([None, None])), (tf.TensorShape([None]))))
+      else:
+        self._dataset = tf.data.Dataset.from_tensor_slices(self._files)
+        if self.params['shuffle']:
+          self._dataset = self._dataset.shuffle(self._size)
+        self._dataset = self._dataset.shard(self._num_workers, self._worker_id)
+        self._dataset = self._dataset.repeat()
+        self._dataset = self._dataset.prefetch(tf.contrib.data.AUTOTUNE)
+        self._dataset = self._dataset.map(
+            lambda line: tf.py_func(
+                self._parse_audio_transcript_element,
+                [line],
+                [self.params['dtype'], tf.int32, tf.int32, tf.int32, tf.float32],
+                stateful=False,
+            ),
+            num_parallel_calls=8,
         )
-      self._dataset = self._dataset.map(
-          lambda x, x_len, y, y_len, duration:
-          [x, x_len, y, y_len],
-          num_parallel_calls=8,
-      )
-      self._dataset = self._dataset.padded_batch(
-          self.params['batch_size'],
-          padded_shapes=([None, self.params['num_audio_features']],
-                         1, [None], 1),
-          padding_values=(
-              tf.cast(0, self.params['dtype']), 0, self.target_pad_value, 0),
-      ).cache()
+        if self.params['max_duration'] is not None:
+          self._dataset = self._dataset.filter(
+              lambda x, x_len, y, y_len, duration:
+              tf.less_equal(duration, self.params['max_duration'])
+          )
+        self._dataset = self._dataset.map(
+            lambda x, x_len, y, y_len, duration:
+            [x, x_len, y, y_len],
+            num_parallel_calls=8,
+        )
+        self._dataset = self._dataset.padded_batch(
+            self.params['batch_size'],
+            padded_shapes=([None, self.params['num_audio_features']],
+                           1, [None], 1),
+            padding_values=(
+                tf.cast(0, self.params['dtype']), 0, self.target_pad_value, 0),
+        ).cache()
     else:
       indices = self.split_data(
           np.array(list(map(str, range(len(self.all_files)))))
