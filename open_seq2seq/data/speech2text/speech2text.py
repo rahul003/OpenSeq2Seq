@@ -162,7 +162,7 @@ class Speech2TextDataLayer(DataLayer):
         self._dataset = tf.data.Dataset.from_tensor_slices(self._files)
         if self.params['shuffle']:
           self._dataset = self._dataset.shuffle(self._size)
-        self._dataset = self._dataset.shard(self._num_workers, self._worker_id)
+        # self._dataset = self._dataset.shard(self._num_workers, self._worker_id)
         self._dataset = self._dataset.repeat()
         self._dataset = self._dataset.prefetch(tf.contrib.data.AUTOTUNE)
         self._dataset = self._dataset.map(
@@ -180,8 +180,7 @@ class Speech2TextDataLayer(DataLayer):
               tf.less_equal(duration, self.params['max_duration'])
           )
         self._dataset = self._dataset.map(
-            lambda x, x_len, y, y_len, duration:
-            [x, x_len, y, y_len],
+            lambda x, x_len, y, y_len, duration: [x, x_len, y, y_len],
             num_parallel_calls=8,
         )
         self._dataset = self._dataset.padded_batch(

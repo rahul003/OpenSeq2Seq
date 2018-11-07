@@ -116,7 +116,7 @@ train_params = {
     ],
     "max_duration": 16.7,
     "shuffle": True,
-    "synthetic": True,
+    "synthetic": False,
     "synthetic_len": 500,
   },
 }
