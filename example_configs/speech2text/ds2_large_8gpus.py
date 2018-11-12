@@ -118,6 +118,7 @@ train_params = {
     "shuffle": True,
     "synthetic": False,
     "synthetic_len": 500,
+    'use_tfrec': True,
   },
 }
 

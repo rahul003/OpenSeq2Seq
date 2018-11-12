@@ -97,6 +97,7 @@ def train(train_model, eval_model=None, debug_port=None):
         [train_model.get_data_layer(i).iterator.initializer
          for i in range(train_model.num_gpus)]
     )
+  train_model.get_data_layer()._create_tfrec()
   
   fine_tuning = (not base_ckpt_dir) or tf.train.latest_checkpoint(checkpoint_dir)
   if fine_tuning:   

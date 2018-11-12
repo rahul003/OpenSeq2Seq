@@ -36,6 +36,7 @@ class Speech2TextDataLayer(DataLayer):
         'autoregressive': bool,
         'synthetic' : bool,
         'synthetic_len': int,
+        'use_tfrec': bool,
     })
 
   def __init__(self, params, model, num_workers, worker_id):
@@ -124,6 +125,20 @@ class Speech2TextDataLayer(DataLayer):
     """Underlying tf.data iterator."""
     return self._iterator
 
+  def decode_tfrec(self, serialized_proto):
+    context_features = {'seq_len': tf.FixedLenFeature([], tf.int64),
+       'label_len': tf.FixedLenFeature([], tf.int64),
+       'duration': tf.FixedLenFeature([], tf.int64),
+      'labels': tf.VarLenFeature(dtype=tf.int64)
+    }
+    sequence_features = {
+      'feats': tf.VarLenFeature(dtype=tf.float32),
+    }
+    context, sequence = tf.parse_single_sequence_example(serialized_proto,
+                                        context_features=context_features,
+                                        sequence_features=sequence_features)
+    return [sequence['feats'], context['seq_len'], context['labels'], context['label_len']]
+
   def build_graph(self):
     """Builds data processing graph using ``tf.data`` API."""
     if self.params['mode'] != 'infer':
@@ -159,37 +174,49 @@ class Speech2TextDataLayer(DataLayer):
           ((tf.TensorShape([None, None, None])), (tf.TensorShape([None])), 
             (tf.TensorShape([None, None])), (tf.TensorShape([None]))))
       else:
-        self._dataset = tf.data.Dataset.from_tensor_slices(self._files)
-        if self.params['shuffle']:
-          self._dataset = self._dataset.shuffle(self._size)
-        # self._dataset = self._dataset.shard(self._num_workers, self._worker_id)
-        self._dataset = self._dataset.repeat()
-        self._dataset = self._dataset.prefetch(tf.contrib.data.AUTOTUNE)
-        self._dataset = self._dataset.map(
-            lambda line: tf.py_func(
+        if self.params['use_tfrec']:
+          self._dataset = tf.data.Dataset.from_tensor_slices(['data_1776.tfrec'])
+          self._dataset = self._dataset.take(1775)
+          self._dataset = self._dataset.map(self.decode_tfrec)
+          self._dataset = self._dataset.padded_batch(
+            self.params['batch_size'],
+            padded_shapes=([None, self.params['num_audio_features']],
+                           1, [None], 1),
+            padding_values=(
+              tf.cast(0, self.params['dtype']), 0, self.target_pad_value, 0),
+          )
+          self._dataset.cache()
+        else:
+          self._dataset = tf.data.Dataset.from_tensor_slices(self._files)
+          if self.params['shuffle']:
+            self._dataset = self._dataset.shuffle(self._size)
+          # self._dataset = self._dataset.shard(self._num_workers, self._worker_id)
+          self._dataset = self._dataset.repeat()
+          self._dataset = self._dataset.map(
+              lambda line: tf.py_func(
                 self._parse_audio_transcript_element,
                 [line],
                 [self.params['dtype'], tf.int32, tf.int32, tf.int32, tf.float32],
                 stateful=False,
-            ),
-            num_parallel_calls=8,
-        )
-        if self.params['max_duration'] is not None:
-          self._dataset = self._dataset.filter(
+              ),
+              num_parallel_calls=8,
+          )
+          if self.params['max_duration'] is not None:
+            self._dataset = self._dataset.filter(
               lambda x, x_len, y, y_len, duration:
               tf.less_equal(duration, self.params['max_duration'])
-          )
-        self._dataset = self._dataset.map(
+            )
+          self._dataset = self._dataset.map(
             lambda x, x_len, y, y_len, duration: [x, x_len, y, y_len],
             num_parallel_calls=8,
-        )
-        self._dataset = self._dataset.padded_batch(
+          )
+          self._dataset = self._dataset.padded_batch(
             self.params['batch_size'],
             padded_shapes=([None, self.params['num_audio_features']],
                            1, [None], 1),
             padding_values=(
                 tf.cast(0, self.params['dtype']), 0, self.target_pad_value, 0),
-        ).cache()
+          )
     else:
       indices = self.split_data(
           np.array(list(map(str, range(len(self.all_files)))))
@@ -328,8 +355,8 @@ class Speech2TextDataLayer(DataLayer):
       target text as `np.array` of ids, target text length.
     """
     audio_filename, transcript = element
-    if not six.PY2:
-      transcript = str(transcript, 'utf-8')
+    # if not six.PY2:
+      # transcript = transcript.decode('utf-8')
     target_indices = [self.params['char2idx'][c] for c in transcript]
     if self.autoregressive:
       target_indices = target_indices + [self.end_index]
@@ -346,6 +373,36 @@ class Speech2TextDataLayer(DataLayer):
         np.int32(target), \
         np.int32([len(target)]), \
         np.float32([audio_duration])
+
+  def _create_tfrec(self):
+    print('WRITING TFREC')
+    writer = tf.python_io.TFRecordWriter('data_1k.tfrec')
+    for i, fil in enumerate(self._files):
+      if not i % 1000:
+        print(f'i:{i}')
+      x, x_len, y, y_len, duration = self._parse_audio_transcript_element(fil)
+
+      if duration <= self.params['max_duration']:
+        x_feat = [tf.train.Feature(float_list=tf.train.FloatList(value=feat))
+                      for feat in x]
+        inputs_dict = {'feats': tf.train.FeatureList(feature=x_feat)}
+        sequence_feats = tf.train.FeatureLists(feature_list=inputs_dict)
+        x_len_feat = tf.train.Feature(int64_list=tf.train.Int64List(value=[x_len]))
+
+        label_feat = tf.train.Feature(int64_list=tf.train.Int64List(value=y))
+        label_len_feat = tf.train.Feature(int64_list=tf.train.Int64List(value=[y_len]))
+
+        duration_feat = tf.train.Feature(int64_list=tf.train.Int64List(value=[duration]))
+        context_feats = tf.train.Features(feature={'seq_len': x_len_feat,
+                                                  'labels': label_feat,
+                                                 'label_len': label_len_feat,
+                                                 'duration': duration_feat})
+        ex = tf.train.SequenceExample(context=context_feats, feature_lists=sequence_feats)
+        ex_str = ex.SerializeToString()
+        writer.write(ex_str)
+      else:
+        print(f'Skipping {fil[0]}')
+    writer.close()
 
   def _get_audio(self, wav):
     """Parses audio from wav and returns array of audio features.
