@@ -41,36 +41,59 @@ class SpeechUtilsTests(tf.test.TestCase):
       self.assertLessEqual(signal.shape[0] * 0.5, signal_augm.shape[0])
       self.assertGreaterEqual(signal.shape[0] * 1.5, signal_augm.shape[0])
 
+  def filenames(self, csvfile):
+      filenames = []
+      with open(csvfile, 'r') as f:
+          for line in f:
+              parts = line.strip().split(',')
+              filenames.append(parts[0])
+      return filenames[1:]
+
+
   def test_get_speech_features_from_file(self):
-    dirname = 'open_seq2seq/test_utils/toy_speech_data/wav_files/'
-    for name in ['46gc040q.wav', '206o0103.wav', '48rc041b.wav']:
-      filename = os.path.join(dirname, name)
-      for num_features in [161, 120]:
-        for window_stride in [10e-3, 5e-3, 40e-3]:
-          for window_size in [20e-3, 30e-3]:
-            for features_type in ['spectrogram', 'mfcc', 'logfbank']:
+    import time
+    import os
+
+    filenames_ = self.filenames("/home/ubuntu/librispeech/librivox-train-clean-100.csv") \
+               + self.filenames("/home/ubuntu/librispeech/librivox-train-clean-360.csv") \
+               + self.filenames("/home/ubuntu/librispeech/librivox-train-other-500.csv")
+    for filename in filenames_:
+      for num_features in [160]:
+        for window_stride in [10e-3]:
+          for window_size in [20e-3]:
+            for features_type in ['spectrogram']:
               freq_s, signal = wave.read(filename)
-              n_window_size = int(freq_s * window_size)
-              n_window_stride = int(freq_s * window_stride)
-              length = 1 + int(math.ceil(
-                  (1.0 * signal.shape[0] - n_window_size) / n_window_stride
-              ))
-              if length % 8 != 0:
-                length += 8 - length % 8
-              right_shape = (length, num_features)
+              #n_window_size = int(freq_s * window_size)
+              #n_window_stride = int(freq_s * window_stride)
+              #length = 1 + int(math.ceil(
+                  #(1.0 * signal.shape[0] - n_window_size) / n_window_stride
+              #))
+              #if length % 8 != 0:
+                #length += 8 - length % 8
+              #right_shape = (length, num_features)
+
+              start = time.time()
               input_features, _ = get_speech_features_from_file(
                   filename,
                   num_features,
                   features_type=features_type,
                   window_size=window_size,
                   window_stride=window_stride,
+                  pad_to=8,
+                  augmentation={'time_stretch_ratio': .05,
+                                'noise_level_min': -90,
+                                'noise_level_max': -60}
               )
-              self.assertTrue(input_features.shape[0] % 8 == 0)
+              duration = time.time() - start
+              with open("/tmp/timings_{}.txt".format(os.getpid()), "a") as f:
+                  f.write(f"{filename},{duration}\n")
+              #self.assertTrue(input_features.shape[0] % 8 == 0)
 
-              self.assertTupleEqual(right_shape, input_features.shape)
-              self.assertAlmostEqual(np.mean(input_features), 0.0)
-              self.assertAlmostEqual(np.std(input_features), 1.0)
+              #self.assertTupleEqual(right_shape, input_features.shape)
+              #self.assertAlmostEqual(np.mean(input_features), 0.0)
+              #self.assertAlmostEqual(np.std(input_features), 1.0)
             # only for spectrogram
+            '''
             with self.assertRaises(AssertionError):
               get_speech_features_from_file(
                   filename,
@@ -79,6 +102,7 @@ class SpeechUtilsTests(tf.test.TestCase):
                   window_size=window_size,
                   window_stride=window_stride,
               )
+            '''
 
   def test_get_speech_features_from_file_augmentation(self):
     augmentation = {

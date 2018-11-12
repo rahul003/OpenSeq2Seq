@@ -16,84 +16,14 @@ from open_seq2seq.utils.utils import deco_print
 from .encoder_decoder import EncoderDecoderModel
 
 
-def sparse_tensor_to_chars(tensor, idx2char):
-  text = [''] * tensor.dense_shape[0]
-  for idx_tuple, value in zip(tensor.indices, tensor.values):
-    text[idx_tuple[0]] += idx2char[value]
-  return text
 
-
-def dense_tensor_to_chars(tensor, idx2char, startindex, endindex):
-  batch_size = len(tensor)
-  text = [''] * batch_size
-  for batch_num in range(batch_size):
-    '''text[batch_num] = "".join([idx2char[idx] for idx in tensor[batch_num]
-                               if idx not in [startindex, endindex]])'''
-
-    text[batch_num] = ""
-    for idx in tensor[batch_num]:
-      if idx == endindex:
-        break
-      text[batch_num] += idx2char[idx]
-  return text
-
-
-def levenshtein(a, b):
-  """Calculates the Levenshtein distance between a and b.
-  The code was copied from: http://hetland.org/coding/python/levenshtein.py
-  """
-  n, m = len(a), len(b)
-  if n > m:
-    # Make sure n <= m, to use O(min(n,m)) space
-    a, b = b, a
-    n, m = m, n
-
-  current = list(range(n + 1))
-  for i in range(1, m + 1):
-    previous, current = current, [i] + [0] * n
-    for j in range(1, n + 1):
-      add, delete = previous[j] + 1, current[j - 1] + 1
-      change = previous[j - 1]
-      if a[j - 1] != b[i - 1]:
-        change = change + 1
-      current[j] = min(add, delete, change)
-
-  return current[n]
-
-
-def plot_attention(alignments, pred_text, encoder_len, training_step):
-
-  alignments = alignments[:len(pred_text), :encoder_len]
-  fig = plt.figure(figsize=(15, 10))
-  ax = fig.add_subplot(1, 1, 1)
-
-  img = ax.imshow(alignments, interpolation='nearest', cmap='Blues')
-  ax.grid()
-  #fig.savefig('/home/rgadde/Desktop/OpenSeq2Seq/plots/file{}.png'.format(training_step), dpi=300)
-
-  sbuffer = BytesIO()
-  fig.savefig(sbuffer, dpi=300)
-  summary = tf.Summary.Image(
-      encoded_image_string=sbuffer.getvalue(),
-      height=int(fig.get_figheight() * 2),
-      width=int(fig.get_figwidth() * 2)
-  )
-  summary = tf.Summary.Value(
-      tag="attention_summary_step_{}".format(int(training_step / 2200)), image=summary)
-
-  plt.close(fig)
-  return summary
-
-
-class Speech2Text(EncoderDecoderModel):
+class NoOpModel(EncoderDecoderModel):
 
   def _create_decoder(self):
     data_layer = self.get_data_layer()
     self.params['decoder_params']['tgt_vocab_size'] = (
         data_layer.params['tgt_vocab_size']
     )
-    self.tensor_to_chars = sparse_tensor_to_chars
-    self.tensor_to_char_params = {}
     self.autoregressive = data_layer.params['autoregressive']
     if self.autoregressive:
       self.params['decoder_params']['GO_SYMBOL'] = data_layer.start_index
@@ -102,16 +32,7 @@ class Speech2Text(EncoderDecoderModel):
       self.tensor_to_char_params['startindex'] = data_layer.start_index
       self.tensor_to_char_params['endindex'] = data_layer.end_index
 
-    return super(Speech2Text, self)._create_decoder()
-
-  def _create_loss(self):
-    if self.get_data_layer().params['autoregressive']:
-      self.params['loss_params'][
-          'batch_size'] = self.params['batch_size_per_gpu']
-      self.params['loss_params']['tgt_vocab_size'] = (
-          self.get_data_layer().params['tgt_vocab_size']
-      )
-    return super(Speech2Text, self)._create_loss()
+    return super(NoOpModel, self)._create_decoder()
 
   def maybe_print_logs(self, input_values, output_values, training_step):
     x, len_x = input_values['source_tensors']
@@ -130,9 +51,9 @@ class Speech2Text(EncoderDecoderModel):
     #print(y_sample)
     #print(len_y_sample)
     #print(y_sample[:len_y_sample])
-    #import pickle
-    #with open("/tmp/mb_{}".format(training_step), "wb") as f:
-        #pickle.dump((x, len_x, y, len_y), f)
+    import pickle
+    with open("/tmp/mb_{}".format(training_step), "wb") as f:
+        pickle.dump((x, len_x, y, len_y), f)
     return
     decoded_sequence = output_values
     y_one_sample = y[0]

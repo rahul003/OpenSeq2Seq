@@ -1,19 +1,19 @@
 # pylint: skip-file
 import tensorflow as tf
-from open_seq2seq.models import Speech2Text
-from open_seq2seq.encoders import DeepSpeech2Encoder
-from open_seq2seq.decoders import FullyConnectedCTCDecoder
+from open_seq2seq.models.noop_model import NoOpModel
+from open_seq2seq.encoders.noop_encoder import NoOpEncoder
+from open_seq2seq.decoders.noop_decoder import NoOpDecoder
 from open_seq2seq.data import Speech2TextDataLayer
-from open_seq2seq.losses import CTCLoss
+from open_seq2seq.losses.noop_loss import NoOpLoss
 from open_seq2seq.optimizers.lr_policies import poly_decay
 
 
-base_model = Speech2Text
+base_model = NoOpModel
 
 base_params = {
   "random_seed": 0,
   "use_horovod": True,
-  "num_gpus": 1,
+  "num_gpus": 8,
   "batch_size_per_gpu": 32,
 
   "num_epochs": 50,
@@ -21,7 +21,7 @@ base_params = {
   "print_loss_steps": 1,
   "profile_steps": 0,
   "profile_name": "ds2",
-  "print_samples_steps": 1,
+  "print_samples_steps": None,
   
   "save_checkpoint_steps": None,
   "save_summaries_steps": None,
@@ -44,7 +44,6 @@ base_params = {
     "larc_eta": 0.001,
   },
   "dtype": "mixed",
-  #"dtype": "float32",
   # weight decay
   "regularizer": tf.contrib.layers.l2_regularizer,
   "regularizer_params": {
@@ -55,49 +54,15 @@ base_params = {
   "summaries": ['learning_rate', 'variables', 'gradients', 'larc_summaries',
                 'variable_norm', 'gradient_norm', 'global_gradient_norm'],
 
-  "encoder": DeepSpeech2Encoder,
+  "encoder": NoOpEncoder,
   "encoder_params": {
-    "conv_layers": [
-      {
-        "kernel_size": [11, 41], "stride": [2, 2],
-        "num_channels": 32, "padding": "SAME"
-      },
-      {
-        "kernel_size": [11, 21], "stride": [1, 2],
-        "num_channels": 32, "padding": "SAME"
-      },
-    ],
-    "num_rnn_layers": 5,
-    "rnn_cell_dim": 800,
-
-    "use_cudnn_rnn": True,
-    "rnn_type": "cudnn_gru",
-    "rnn_unidirectional": False,
-
-    "row_conv": False,
-
-    "n_hidden": 1600,
-
-    "dropout_keep_prob": 0.5,
-    "activation_fn": tf.nn.relu,
-    "data_format": "channels_first",
   },
 
-  "decoder": FullyConnectedCTCDecoder,
+  "decoder": NoOpDecoder,
   "decoder_params": {
-    "use_language_model": False,
-
-    # params for decoding the sequence with language model
-    "beam_width": 512,
-    "alpha": 2.0,
-    "beta": 1.0,
-
-    "decoder_library_path": "ctc_decoder_with_lm/libctc_decoder_with_kenlm.so",
-    "lm_path": "language_model/4-gram.binary",
-    "trie_path": "language_model/trie.binary",
-    "alphabet_config_path": "open_seq2seq/test_utils/toy_speech_data/vocab.txt",
   },
-  "loss": CTCLoss,
+
+  "loss": NoOpLoss,
   "loss_params": {},
 }
 

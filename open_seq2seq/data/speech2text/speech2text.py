@@ -14,6 +14,7 @@ from six.moves import range
 from open_seq2seq.data.data_layer import DataLayer
 from open_seq2seq.data.utils import load_pre_existing_vocabulary
 from .speech_utils import get_speech_features_from_file, get_speech_features
+import time
 
 
 class Speech2TextDataLayer(DataLayer):
@@ -146,18 +147,58 @@ class Speech2TextDataLayer(DataLayer):
         max_target_shape = max(target_shapes)
         dt = np.float32 if self.params['dtype'] == tf.float32 else np.float16
         def generate_batch():
-          avg_len = self.params['synthetic_len']
+          #avg_len = self.params['synthetic_len']
+          #while 1:
+            #x = np.random.rand(self.params['batch_size'], max_shape, self.params['num_audio_features']).astype(dtype=dt, copy=False)
+            #x_len = np.array(src_shapes)
+            #y = np.random.randint(0, 10, size=(self.params['batch_size'], max_target_shape), dtype=np.int32)
+            #y_len = np.array(target_shapes)
+            #yield (x, x_len, y, y_len)
+
+          import pickle
+          with open("/home/ubuntu/mb/mb_29", 'rb') as f:
+            (x, len_x, y, y_len) = pickle.load(f)
+            dt = np.float32 if self.params['dtype'] == tf.float32 else np.float16
           while 1:
-            x = np.random.rand(self.params['batch_size'], max_shape, self.params['num_audio_features']).astype(dtype=dt, copy=False)
-            x_len = np.array(src_shapes)
-            y = np.random.randint(0, 10, size=(self.params['batch_size'], max_target_shape), dtype=np.int32)
-            y_len = np.array(target_shapes)
-            yield (x, x_len, y, y_len)
-        
+            yield (x.astype(dtype=dt, copy=False), len_x, y, y_len)
+
         self._dataset = tf.data.Dataset.from_generator(generate_batch,
-          (dt, tf.int32, tf.int32, tf.int32),
+          (tf.float32, tf.int32, tf.int32, tf.int32),
           ((tf.TensorShape([None, None, None])), (tf.TensorShape([None])), 
             (tf.TensorShape([None, None])), (tf.TensorShape([None]))))
+
+        """
+        def generate_batch():
+            import random
+            files = self._files.copy()
+            while 1:
+                random.shuffle(files)
+                for filename in files:
+                    x, x_len, y, y_len, duration = self._parse_audio_transcript_element(filename)
+                    if self.params['max_duration'] is not None and duration > self.params['max_duration']:
+                        continue
+                    dt = np.float32 if self.params['dtype'] == tf.float32 else np.float16
+                    yield (x.astype(dtype=dt, copy=False), x_len, y, y_len)
+
+        self._dataset = tf.data.Dataset.from_generator(generate_batch,
+          (tf.float32 if self.params['dtype'] == tf.float32 else tf.float16, tf.int32, tf.int32, tf.int32),
+          (
+              (tf.TensorShape([None, None])), 
+              (tf.TensorShape([None])), 
+              (tf.TensorShape([None])), 
+              (tf.TensorShape([None]))
+          )
+        )
+
+        self._dataset = self._dataset.padded_batch(
+            self.params['batch_size'],
+            padded_shapes=([None, self.params['num_audio_features']], 1, [None], 1),
+            padding_values=(tf.cast(0, self.params['dtype']), 0, self.target_pad_value, 0),
+        )
+
+        self._dataset = self._dataset.prefetch(512)
+        """
+        
       else:
         self._dataset = tf.data.Dataset.from_tensor_slices(self._files)
         if self.params['shuffle']:
@@ -172,7 +213,7 @@ class Speech2TextDataLayer(DataLayer):
                 [self.params['dtype'], tf.int32, tf.int32, tf.int32, tf.float32],
                 stateful=False,
             ),
-            num_parallel_calls=8,
+            num_parallel_calls=4,
         )
         if self.params['max_duration'] is not None:
           self._dataset = self._dataset.filter(
@@ -181,7 +222,7 @@ class Speech2TextDataLayer(DataLayer):
           )
         self._dataset = self._dataset.map(
             lambda x, x_len, y, y_len, duration: [x, x_len, y, y_len],
-            num_parallel_calls=8,
+            num_parallel_calls=4,
         )
         self._dataset = self._dataset.padded_batch(
             self.params['batch_size'],
@@ -189,7 +230,7 @@ class Speech2TextDataLayer(DataLayer):
                            1, [None], 1),
             padding_values=(
                 tf.cast(0, self.params['dtype']), 0, self.target_pad_value, 0),
-        ).cache()
+        )#.cache()
     else:
       indices = self.split_data(
           np.array(list(map(str, range(len(self.all_files)))))
@@ -327,6 +368,7 @@ class Speech2TextDataLayer(DataLayer):
       tuple: source audio features as ``np.array``, length of source sequence,
       target text as `np.array` of ids, target text length.
     """
+    start = time.time()
     audio_filename, transcript = element
     if not six.PY2:
       transcript = str(transcript, 'utf-8')
@@ -341,6 +383,7 @@ class Speech2TextDataLayer(DataLayer):
         features_type=self.params['input_type'],
         augmentation=self.params.get('augmentation', None),
     )
+    #print(time.time() - start)
     return source.astype(self.params['dtype'].as_numpy_dtype()), \
         np.int32([len(source)]), \
         np.int32(target), \

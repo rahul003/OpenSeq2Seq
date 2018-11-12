@@ -78,7 +78,7 @@ class Decoder:
       :ref:`mixed precision training <mixed_precision>` section in docs. If no
       dtype is provided, model dtype will be used.
     """
-    check_params(params, self.get_required_params(), self.get_optional_params())
+    #check_params(params, self.get_required_params(), self.get_optional_params())
     self._params = copy.deepcopy(params)
     self._model = model
 

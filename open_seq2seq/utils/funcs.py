@@ -108,6 +108,11 @@ def train(train_model, eval_model=None, debug_port=None):
         local_init_op=tf.group(tf.local_variables_initializer(), init_data_layer)
     )
   fetches = [train_model.train_op]
+  #tf.control_dependencies([train_model.train_op, train_model.get_data_layer().input_tensors['source_tensors'][0]])
+  #tf.control_dependencies([train_model.train_op, train_model.get_data_layer().input_tensors['source_tensors'][1]])
+  #tf.control_dependencies([train_model.train_op, train_model.get_data_layer().input_tensors['target_tensors'][0]])
+  #tf.control_dependencies([train_model.train_op, train_model.get_data_layer().input_tensors['target_tensors'][1]])
+  #fetches = [train_model.loss]
   try:
     total_objects = 0.0
     # on horovod num_gpus is 1
