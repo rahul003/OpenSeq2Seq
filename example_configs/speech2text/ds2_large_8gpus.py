@@ -115,7 +115,7 @@ train_params = {
       "~/librispeech/librivox-train-other-500.csv",
     ],
     "max_duration": 16.7,
-    "shuffle": True,
+    "shuffle": False,
     "synthetic": False,
     "synthetic_len": 500,
   },
