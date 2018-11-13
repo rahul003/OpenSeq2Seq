@@ -18,10 +18,10 @@ base_params = {
 
   "num_epochs": 50,
   "print_bench_info_steps" : 50,
-  "print_loss_steps": 50,
+  "print_loss_steps": 1,
   "profile_steps": 0,
   "profile_name": "ds2",
-  "print_samples_steps": 100,
+  "print_samples_steps": 1,
   
   "save_checkpoint_steps": 1000000,
   "save_summaries_steps": 1000000,
@@ -110,15 +110,16 @@ train_params = {
                      'noise_level_max': -60},
     "vocab_file": "open_seq2seq/test_utils/toy_speech_data/vocab.txt",
     "dataset_files": [
-      "~/librispeech/librivox-train-clean-100.csv",
-      "~/librispeech/librivox-train-clean-360.csv",
-      "~/librispeech/librivox-train-other-500.csv",
+      "/home/ubuntu/librispeech/librivox-train-clean-100.csv",
+      "/home/ubuntu/librispeech/librivox-train-clean-360.csv",
+      "/home/ubuntu/librispeech/librivox-train-other-500.csv",
     ],
     "max_duration": 16.7,
     "shuffle": True,
     "synthetic": False,
     "synthetic_len": 500,
-    'use_tfrec': True,
+    "pad_to": 32,
+    'use_tfrec': False,
   },
 }
 

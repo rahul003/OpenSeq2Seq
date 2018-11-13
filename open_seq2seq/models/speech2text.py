@@ -130,6 +130,9 @@ class Speech2Text(EncoderDecoderModel):
     #print(y_sample)
     #print(len_y_sample)
     #print(y_sample[:len_y_sample])
+    #import pickle
+    #with open("/tmp/mb_{}".format(training_step), "wb") as f:
+        #pickle.dump(
     return
     decoded_sequence = output_values
     y_one_sample = y[0]

@@ -107,6 +107,8 @@ class Speech2TextDataLayer(DataLayer):
     self._input_tensors = None
 
     self.params['max_duration'] = params.get('max_duration', None)
+    from pprint import pprint
+    pprint(self.params['char2idx'])
 
   def split_data(self, data):
     if self.params['mode'] != 'train' and self._num_workers is not None:
@@ -126,6 +128,7 @@ class Speech2TextDataLayer(DataLayer):
     return self._iterator
 
   def decode_tfrec(self, serialized_proto):
+    '''
     context_features = {'seq_len': tf.FixedLenFeature([], tf.int64),
        'label_len': tf.FixedLenFeature([], tf.int64),
        'duration': tf.FixedLenFeature([], tf.int64),
@@ -138,6 +141,19 @@ class Speech2TextDataLayer(DataLayer):
                                         context_features=context_features,
                                         sequence_features=sequence_features)
     return [sequence['feats'], context['seq_len'], context['labels'], context['label_len']]
+    '''
+    features = {
+        'feats': tf.VarLenFeature(tf.float32),
+        'labels': tf.VarLenFeature(tf.int64),
+    }
+    parsed = tf.parse_single_example(serialized_proto, features)
+    x_len = tf.floordiv(tf.size(parsed['feats']), self.params['num_audio_features'])
+    y_len = tf.size(parsed['labels'])
+    
+    features = tf.cast(tf.sparse_tensor_to_dense(parsed['feats']), dtype=self.params['dtype'])
+    labels = tf.cast(tf.sparse_tensor_to_dense(parsed['labels']), dtype=tf.int32)
+    x = tf.reshape(features, (x_len, self.params['num_audio_features']))
+    return (x, [x_len], labels, [y_len])
 
   def build_graph(self):
     """Builds data processing graph using ``tf.data`` API."""
@@ -175,17 +191,20 @@ class Speech2TextDataLayer(DataLayer):
             (tf.TensorShape([None, None])), (tf.TensorShape([None]))))
       else:
         if self.params['use_tfrec']:
-          self._dataset = tf.data.Dataset.from_tensor_slices(['data_1776.tfrec'])
-          self._dataset = self._dataset.take(1775)
-          self._dataset = self._dataset.map(self.decode_tfrec)
+          #self._dataset = tf.data.Dataset.from_tensor_slices(['data_1k.tfrec'])
+          #self._dataset = self._dataset.take(1775)
+          self._dataset = tf.data.TFRecordDataset('data_1k.tfrec')
+          self._dataset = self._dataset.map(lambda x: self.decode_tfrec(x), num_parallel_calls=8)
           self._dataset = self._dataset.padded_batch(
             self.params['batch_size'],
             padded_shapes=([None, self.params['num_audio_features']],
                            1, [None], 1),
             padding_values=(
               tf.cast(0, self.params['dtype']), 0, self.target_pad_value, 0),
+            drop_remainder=True
           )
-          self._dataset.cache()
+          self._dataset = self._dataset.repeat()
+          #self._dataset.cache()
         else:
           self._dataset = tf.data.Dataset.from_tensor_slices(self._files)
           if self.params['shuffle']:
@@ -355,8 +374,9 @@ class Speech2TextDataLayer(DataLayer):
       target text as `np.array` of ids, target text length.
     """
     audio_filename, transcript = element
-    # if not six.PY2:
-      # transcript = transcript.decode('utf-8')
+    if not six.PY2:
+      #transcript = transcript.decode('utf-8')
+      transcript = str(transcript, 'utf-8')
     target_indices = [self.params['char2idx'][c] for c in transcript]
     if self.autoregressive:
       target_indices = target_indices + [self.end_index]
@@ -378,11 +398,14 @@ class Speech2TextDataLayer(DataLayer):
     print('WRITING TFREC')
     writer = tf.python_io.TFRecordWriter('data_1k.tfrec')
     for i, fil in enumerate(self._files):
-      if not i % 1000:
-        print(f'i:{i}')
+      if i == 1000:
+        break
+      #if not i % 1000:
+        #print(f'i:{i}')
       x, x_len, y, y_len, duration = self._parse_audio_transcript_element(fil)
 
       if duration <= self.params['max_duration']:
+        '''
         x_feat = [tf.train.Feature(float_list=tf.train.FloatList(value=feat))
                       for feat in x]
         inputs_dict = {'feats': tf.train.FeatureList(feature=x_feat)}
@@ -399,9 +422,17 @@ class Speech2TextDataLayer(DataLayer):
                                                  'duration': duration_feat})
         ex = tf.train.SequenceExample(context=context_feats, feature_lists=sequence_feats)
         ex_str = ex.SerializeToString()
-        writer.write(ex_str)
+        '''
+
+        feature = {
+            'feats': tf.train.Feature(float_list=tf.train.FloatList(value=x.flatten())),
+            'labels': tf.train.Feature(int64_list=tf.train.Int64List(value=y)),
+        }
+        example = tf.train.Example(features=tf.train.Features(feature=feature))
+        writer.write(example.SerializeToString())
       else:
-        print(f'Skipping {fil[0]}')
+        #print(f'Skipping {fil[0]}')
+        pass
     writer.close()
 
   def _get_audio(self, wav):
@@ -459,4 +490,5 @@ class Speech2TextDataLayer(DataLayer):
 
   def get_size_in_samples(self):
     """Returns the number of audio files."""
-    return len(self._files)
+    #return len(self._files)
+    return 960
